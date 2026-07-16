@@ -1,14 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-
-type Track = {
-  id: string;
-  audioUrl: string;
-  title: string;
-  duration: number;
-  tags?: string;
-};
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { ProcessingIndicator } from "@/components/ProcessingIndicator";
+import { TrackCard, type Track } from "@/components/TrackCard";
 
 type Phase = "idle" | "submitting" | "processing" | "completed" | "failed";
 
@@ -21,6 +16,8 @@ export default function Home() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
+  const [resultTaskId, setResultTaskId] = useState<string | null>(null);
+  const [resultInstrumental, setResultInstrumental] = useState(false);
   const pollCount = useRef(0);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -97,6 +94,8 @@ export default function Home() {
         return;
       }
 
+      setResultTaskId(body.taskId);
+      setResultInstrumental(instrumental);
       setPhase("processing");
       pollTimer.current = setTimeout(() => pollStatus(body.taskId), POLL_INTERVAL_MS);
     } catch {
@@ -115,12 +114,20 @@ export default function Home() {
   const isBusy = phase === "submitting" || phase === "processing";
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-6 py-16">
-      <header>
-        <h1 className="text-2xl font-semibold">AI Music Creation — MVP</h1>
-        <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-          Describe a song. Generation takes 1–3 minutes.
-        </p>
+    <main className="relative mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-6 py-16">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-72 bg-[radial-gradient(ellipse_60%_60%_at_50%_0%,rgba(139,92,246,0.12),transparent)] dark:bg-[radial-gradient(ellipse_60%_60%_at_50%_0%,rgba(139,92,246,0.18),transparent)]"
+      />
+
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">AI Music Creation — MVP</h1>
+          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+            Describe a song. Generation takes 1–3 minutes.
+          </p>
+        </div>
+        <ThemeToggle />
       </header>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -133,7 +140,7 @@ export default function Home() {
             rows={4}
             disabled={isBusy}
             placeholder="A warm, upbeat lofi hip-hop track with soft piano and vinyl crackle"
-            className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm outline-none focus:border-neutral-500 disabled:opacity-60 dark:border-neutral-700 dark:bg-neutral-900"
+            className="rounded-xl border border-neutral-200 bg-white/80 px-3 py-2 text-sm shadow-sm outline-none backdrop-blur transition-all duration-200 focus:border-violet-400 focus:ring-2 focus:ring-violet-100 disabled:opacity-60 dark:border-neutral-800 dark:bg-neutral-900/60 dark:focus:border-violet-500 dark:focus:ring-violet-900/40"
           />
           <span className="self-end text-xs text-neutral-400">{prompt.length}/500</span>
         </label>
@@ -144,6 +151,7 @@ export default function Home() {
             checked={instrumental}
             onChange={(e) => setInstrumental(e.target.checked)}
             disabled={isBusy}
+            className="accent-violet-600"
           />
           Instrumental only (no vocals)
         </label>
@@ -151,16 +159,17 @@ export default function Home() {
         <button
           type="submit"
           disabled={!prompt.trim() || isBusy}
-          className="rounded-lg bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-neutral-900"
+          className="flex items-center justify-center gap-3 rounded-xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-all duration-200 hover:enabled:-translate-y-0.5 hover:enabled:shadow-md active:enabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-neutral-900"
         >
+          {phase === "processing" && <ProcessingIndicator />}
           {phase === "submitting" && "Starting generation…"}
-          {phase === "processing" && "Generating… this can take a couple minutes"}
+          {phase === "processing" && "Generating…"}
           {(phase === "idle" || phase === "completed" || phase === "failed") && "Generate track"}
         </button>
       </form>
 
       {phase === "processing" && (
-        <p className="text-sm text-neutral-500 dark:text-neutral-400" role="status" aria-live="polite">
+        <p className="animate-fade-in text-sm text-neutral-500 dark:text-neutral-400" role="status" aria-live="polite">
           Still working — checking again every few seconds. Feel free to leave this tab open.
         </p>
       )}
@@ -168,7 +177,7 @@ export default function Home() {
       {phase === "failed" && error && (
         <div
           role="alert"
-          className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+          className="animate-fade-in-up rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/60 dark:text-red-200"
         >
           {error}
           <button onClick={reset} className="ml-2 font-medium underline underline-offset-2">
@@ -177,34 +186,24 @@ export default function Home() {
         </div>
       )}
 
-      {phase === "completed" && tracks.length > 0 && (
+      {phase === "completed" && tracks.length > 0 && resultTaskId && (
         <section aria-live="polite" className="flex flex-col gap-4">
           <h2 className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
             Done — {tracks.length} version{tracks.length > 1 ? "s" : ""} generated
           </h2>
-          {tracks.map((track) => (
-            <div
+          {tracks.map((track, i) => (
+            <TrackCard
               key={track.id}
-              className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-4 dark:border-neutral-800"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">{track.title || "Untitled"}</span>
-                <a
-                  href={track.audioUrl}
-                  download
-                  className="text-xs font-medium underline underline-offset-2"
-                >
-                  Download
-                </a>
-              </div>
-              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-              <audio controls src={track.audioUrl} className="w-full">
-                Your browser doesn&apos;t support inline audio playback.{" "}
-                <a href={track.audioUrl}>Download the track instead</a>.
-              </audio>
-            </div>
+              track={track}
+              taskId={resultTaskId}
+              instrumental={resultInstrumental}
+              index={i}
+            />
           ))}
-          <button onClick={reset} className="self-start text-sm underline underline-offset-2">
+          <button
+            onClick={reset}
+            className="self-start text-sm text-neutral-500 underline underline-offset-2 transition-colors hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100"
+          >
             Generate another
           </button>
         </section>

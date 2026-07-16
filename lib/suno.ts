@@ -73,3 +73,30 @@ export async function getGenerationStatus(taskId: string): Promise<RecordInfoRes
   }
   return body;
 }
+
+type AlignedWord = { word: string; success: boolean; startS: number; endS: number };
+
+export type LyricsResponse = {
+  code: number;
+  msg: string;
+  data: { alignedWords?: AlignedWord[] };
+};
+
+export async function getLyrics(taskId: string, audioId: string): Promise<string> {
+  const res = await fetch(`${SUNO_API_BASE}/generate/get-timestamped-lyrics`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getApiKey()}`,
+    },
+    body: JSON.stringify({ taskId, audioId }),
+  });
+
+  const body: LyricsResponse = await res.json();
+  if (!res.ok || body.code !== 200) {
+    throw new Error(body.msg || `Suno API error (${res.status})`);
+  }
+
+  const words = body.data.alignedWords ?? [];
+  return words.map((w) => w.word).join(" ").trim();
+}
